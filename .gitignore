@@ -1,2 +1,4 @@
 /.idea
 /venv
+/algorithm/model_file
+/algorithm/__pycache__
