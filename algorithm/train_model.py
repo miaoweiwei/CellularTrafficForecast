@@ -37,46 +37,24 @@ for gpu in gpus:
 logical_gpus = tf.config.experimental.list_logical_devices('GPU')
 print("逻辑GPU的数量：", len(logical_gpus))
 
-# seq_length = 13  # 序列的长度 输入的长度+输出的长度
-# d = 5
+"""
+数据预处理
+"""
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
 data_path = "D:/Myproject/Python/Datasets/MobileFlowData/PreprocessingData/milan_feature.txt"
-batch_size = 1024
-
-provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
-# 在模型里使用了批归一化，数据就不需要在做归一化了
-train_data, valid_data, test_data = provider.provider(valid_size=0.1, test_size=0.1, israndom=False, isnorm=True)
+batch_size = 1024 * len(logical_gpus)
 
 # 构建数据集
-train_dataset = tf.data.Dataset.from_generator(
-    lambda: provider.correlation_split_generate(data=train_data), output_types=tf.float64)
-# 验证集不需要打乱
-valid_dataset = tf.data.Dataset.from_generator(
-    lambda: provider.correlation_split_generate(data=valid_data, shuffle=False), output_types=tf.float64)
-# 测试集不需要打乱
-test_dataset = tf.data.Dataset.from_generator(
-    lambda: provider.correlation_split_generate(data=test_data, shuffle=False), output_types=tf.float64)
-
-for flow in train_dataset.take(1):
-    print(flow.shape)
-
-# 把 train_dataset 里的每一个小的序列, 形状[13, 11, 11]
-# 使用 split_input_target 函数处理
-# 生成 input 和 output, 形状分别为 [12,11,11], [1,] 取最后一帧的中间的数据为输出
-train_dataset = train_dataset.map(lambda x: provider.split_input_target(x), num_parallel_calls=os.cpu_count() * 2)
-# num_parallel_calls值为“ tf.data.experimental.AUTOTUNE”，那么将根据可用的CPU动态设置并行调用的次数。
-valid_dataset = valid_dataset.map(lambda x: provider.split_input_target(x), num_parallel_calls=os.cpu_count() * 2)
-test_dataset = test_dataset.map(lambda x: provider.split_input_target(x), num_parallel_calls=os.cpu_count() * 2)
-
-# correlation_split_generate 函数已经进行了数据的打乱
-# train_dataset = train_dataset.shuffle(buffer_size=batch_size)
-# drop_remainder=False最后的不够一个batch_size 也要
-train_dataset = train_dataset.batch(batch_size, drop_remainder=False).repeat().prefetch(32)  # repeat 参数为空表示意思是重复无数遍
-valid_dataset = valid_dataset.batch(batch_size, drop_remainder=False).repeat().prefetch(32)
-test_dataset = test_dataset.batch(batch_size=batch_size).repeat().prefetch(32)
-
-for inputs, outputs in train_dataset.take(2):
+provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
+dataset = data_provider.Dateset(provider)
+# 在模型里使用了批归一化，数据就不需要在做归一化了
+dataset.provider(valid_size=0.1, test_size=0.1, israndom=False, isnorm=True)
+train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
+                                                                 train_prefetch=32,
+                                                                 valid_prefetch=32,
+                                                                 test_prefetch=32)
+for inputs, outputs in test_dataset.take(2):
     print(type(inputs), type(outputs))
     print(inputs.shape, outputs.shape)
 
@@ -124,11 +102,9 @@ model.compile(loss=keras.losses.mean_squared_error,
               )
 
 epochs = 20
-steps_per_epoch = math.ceil((len(train_data) - seq_length + 1) * 100 * 100 / batch_size)
-validation_steps = math.ceil((len(valid_data) - seq_length + 1) * 100 * 100 / batch_size)
 history = model.fit_generator(train_dataset,
-                              steps_per_epoch=steps_per_epoch,
+                              steps_per_epoch=dataset.train_step_per_epoch,
                               validation_data=valid_dataset,
-                              validation_steps=validation_steps,
+                              validation_steps=dataset.valid_step_per_epoch,
                               epochs=epochs,
                               callbacks=callbacks)

@@ -8,10 +8,11 @@
 @Desc    : 
 """
 import json
+import math
+import os
 import time
 import numpy as np
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
 
 
 class DataProvider(object):
@@ -85,11 +86,16 @@ class DataProvider(object):
         return features
 
     def _create_seq(self, flow_matrix):
+        """ 数据序列化，
+        :param flow_matrix: 数据集矩阵
+        :return:返回的数据形状为 [len(flow_matrix) - self.time_slice + 1, self.time_slice, flow_matrix.shape[1], flow_matrix.shape[2]]
+        """
         start_time = time.time()
         # 生成序列的总数为 len(flow_matrix) - self.time_slice + 1
         # 形状为 [len(flow_matrix) - self.time_slice + 1, self.time_slice, flow_matrix.shape[1], flow_matrix.shape[2]]
         result = np.array(
             [flow_matrix[i:i + self.time_slice] for i in range(flow_matrix.shape[0] - self.time_slice + 1)])
+
         m, s = divmod(time.time() - start_time, 60)
         h, m = divmod(m, 60)
         print("数据序列化耗时: {:0>2d}:{:0>2d}:{:0>2d}".format(int(h), int(m), int(s)))
@@ -192,13 +198,17 @@ class DataProvider(object):
         """
         while True:
             for flow in data:
+                # 对一个序列的数据进行填充分割， flow的形状为[time_slice,100,100]
                 feature_map = self._correlation_split(flow, padding)
                 if shuffle:  # 打乱数据，这里打乱的是在一帧上面打乱数据
                     feature_map = np.random.permutation(feature_map)
                 for temp in feature_map:
-                    yield temp  # 形状为 [13, 11, 11]
+                    yield temp  # 形状为 [time_slice, relevance_distance*2+1, relevance_distance*2+1],如[13,11,11]
 
     def split_input_target(self, flow, is_prediction=False):
+        """
+        分离输入数据和标签
+        """
         # 输出为最后一张图的中心位置的值
         # 把数据集的输入reshape成 (12, 11, 11, 1)
         width = height = 2 * self.relevance_distance + 1
@@ -227,3 +237,55 @@ class DataProvider(object):
         h, m = divmod(m, 60)
         print("获取测试的数据耗时: {:0>2d}:{:0>2d}:{:0>2d}".format(int(h), int(m), int(s)))
         return np.array(x), np.array(y)
+
+
+class Dateset(object):
+    def __init__(self, provider):
+        self.provider = provider
+
+    def provider(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='log1p', isnorm=True):
+        train_data, valid_data, test_data = self.provider.provider(valid_size=valid_size,
+                                                                   test_size=test_size,
+                                                                   israndom=israndom,
+                                                                   norm_func=norm_func,
+                                                                   isnorm=isnorm)
+        return train_data, valid_data, test_data
+
+    def _creat_dataset(self, data, batch_size, drop_remainder=True, prefetch_size=32):
+        self.batch_size = batch_size
+        # 构建数据集
+        dataset = tf.data.Dataset.from_generator(lambda: self.provider.correlation_split_generate(data=data),
+                                                 output_types=tf.float64)
+        # 把 train_dataset 里的每一个小的序列, 形状[13, 11, 11]
+        # 使用 split_input_target 函数处理
+        # 生成 input 和 output, 形状分别为 [12,11,11], [1,] 取最后一帧的中间的数据为输出
+        # num_parallel_calls值为“ tf.data.experimental.AUTOTUNE”，那么将根据可用的CPU动态设置并行调用的次数。
+        dataset = dataset.map(lambda x: self.provider.split_input_target(x), num_parallel_calls=os.cpu_count() * 2)
+        # correlation_split_generate 函数已经进行了数据的打乱
+        # train_dataset = train_dataset.shuffle(buffer_size=batch_size)
+        # drop_remainder=False最后的不够一个batch_size 也要
+        # repeat 参数为空表示意思是重复无数遍
+        dataset = dataset.batch(batch_size, drop_remainder=drop_remainder).repeat().prefetch(prefetch_size)
+        return dataset
+
+    def get_dataset(self, batch_size, train_prefetch=32, valid_prefetch=32, test_prefetch=32):
+        train_dataset = self._creat_dataset(self.provider.train_dataset, batch_size, prefetch_size=train_prefetch)
+        valid_dataset = self._creat_dataset(self.provider.valid_data, batch_size, prefetch_size=valid_prefetch)
+        test_dataset = self._creat_dataset(self.provider.test_dataset, batch_size, prefetch_size=test_prefetch)
+        return train_dataset, valid_dataset, test_dataset
+
+    def _step(self, data):
+        """计算每一个轮次有多个batch_Size"""
+        return math.ceil((len(data) - self.provider.time_slice + 1) * 100 * 100 / self.batch_size)
+
+    @property
+    def train_step_per_epoch(self):
+        return self._step(self.provider.train_dataset)
+
+    @property
+    def valid_step_per_epoch(self):
+        return self._step(self.provider.valid_data)
+
+    @property
+    def test_step_per_epoch(self):
+        return self._step(self.provider.test_dataset)
