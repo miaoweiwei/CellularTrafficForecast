@@ -281,7 +281,7 @@ class Dateset(object):
 
     @property
     def train_step_per_epoch(self):
-        return self._step(self.provider.train_dataset)
+        return self._step(self.provider.train_data)
 
     @property
     def valid_step_per_epoch(self):
@@ -289,4 +289,4 @@ class Dateset(object):
 
     @property
     def test_step_per_epoch(self):
-        return self._step(self.provider.test_dataset)
+        return self._step(self.provider.test_data)
