@@ -11,6 +11,7 @@ import json
 import math
 import os
 import time
+
 import numpy as np
 import tensorflow as tf
 
@@ -243,7 +244,7 @@ class Dateset(object):
     def __init__(self, provider):
         self.provider = provider
 
-    def provider(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='log1p', isnorm=True):
+    def ceate_data(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='log1p', isnorm=True):
         train_data, valid_data, test_data = self.provider.provider(valid_size=valid_size,
                                                                    test_size=test_size,
                                                                    israndom=israndom,
@@ -269,9 +270,9 @@ class Dateset(object):
         return dataset
 
     def get_dataset(self, batch_size, train_prefetch=32, valid_prefetch=32, test_prefetch=32):
-        train_dataset = self._creat_dataset(self.provider.train_dataset, batch_size, prefetch_size=train_prefetch)
+        train_dataset = self._creat_dataset(self.provider.train_data, batch_size, prefetch_size=train_prefetch)
         valid_dataset = self._creat_dataset(self.provider.valid_data, batch_size, prefetch_size=valid_prefetch)
-        test_dataset = self._creat_dataset(self.provider.test_dataset, batch_size, prefetch_size=test_prefetch)
+        test_dataset = self._creat_dataset(self.provider.test_data, batch_size, prefetch_size=test_prefetch)
         return train_dataset, valid_dataset, test_dataset
 
     def _step(self, data):

@@ -13,7 +13,6 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Conv2D, Dropout, SeparableConv2D
 from algorithm.tcn import TCN, Tcn2D
-import pydot
 
 
 def _get_inputs(time_slice=12, relevance_distance=5):

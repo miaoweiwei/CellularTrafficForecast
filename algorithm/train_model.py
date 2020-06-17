@@ -10,21 +10,16 @@
 """
 import os
 import sys
-import math
-import tqdm
-import time
-import datetime
-import numpy as np
-import pandas as pd
+
 import matplotlib as mpl
-import matplotlib.pyplot as plt
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
 from algorithm import data_provider, models
 
 print(sys.version_info, "\n")
-for module in tqdm, np, pd, mpl, tf, keras:
+for module in np, mpl, tf, keras:
     print(module.__name__, module.__version__)
 
 # tf.debugging.set_log_device_placement(True)# 显示GPU的一些信息
@@ -49,7 +44,7 @@ batch_size = 1024 * len(logical_gpus)
 provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
 dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
-dataset.provider(valid_size=0.1, test_size=0.1, israndom=False, isnorm=True)
+dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=False, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
                                                                  train_prefetch=32,
                                                                  valid_prefetch=32,
