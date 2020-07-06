@@ -231,6 +231,7 @@ class DataProvider(object):
         while i < len(data) and i < end:
             feature_map = self._correlation_split(data[i], padding="same")
             x_, y_ = self.split_input_target(feature_map[cell_id - 1], is_prediction=True)
+            del feature_map
             x.append(x_)
             y.append(y_)
             i += 1
