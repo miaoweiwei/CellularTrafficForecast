@@ -160,7 +160,7 @@ def tcn_model(time_slice=16,
             added_output = keras.layers.LayerNormalization()(added_output)
 
         added_output = keras.layers.Activation(activation)(added_output)
-        added_output = keras.layers.Dropout(dropout_rate)(added_output)
+        # added_output = keras.layers.Dropout(dropout_rate)(added_output)
         return added_output
 
     inputs_ = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
@@ -203,7 +203,9 @@ def tcn_model(time_slice=16,
     x = convs[0]
     x = keras.layers.Flatten()(x)
     x = keras.layers.Dense(4096, activation=activation)(x)
+    x = keras.layers.Dropout(dropout_rate)(x)
     x = keras.layers.Dense(2048, activation=activation)(x)
+    x = keras.layers.Dropout(dropout_rate)(x)
     x = keras.layers.Dense(512, activation=activation)(x)
     outputs = keras.layers.Dense(1)(x)
     model = keras.models.Model(inputs=inputs_, outputs=outputs)

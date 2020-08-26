@@ -25,9 +25,9 @@ for module in np, mpl, tf, keras:
 # tf.debugging.set_log_device_placement(True)# 显示GPU的一些信息
 gpus = tf.config.experimental.list_physical_devices("GPU")
 print("物理GPU的数量：", len(gpus))
+tf.config.experimental.set_visible_devices(gpus[0], 'GPU')  # 设置对本进程可见的GPU设备
 # 设置GPU内存自增长必须放到程序刚开始的地方，否则会报错
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
+tf.config.experimental.set_memory_growth(gpus[0], True)
 
 logical_gpus = tf.config.experimental.list_logical_devices('GPU')
 print("逻辑GPU的数量：", len(logical_gpus))
@@ -37,18 +37,18 @@ print("逻辑GPU的数量：", len(logical_gpus))
 """
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
-data_path = "D:/Myproject/Python/Datasets/MobileFlowData/PreprocessingData/milan_feature.txt"
-batch_size = 1024 * len(logical_gpus)
+data_path = "E:/miao/dataset/milan_feature.txt"
+batch_size = 4000
 
 # 构建数据集
 provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
 dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
-dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=False, isnorm=True)
+dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
-                                                                 train_prefetch=32,
-                                                                 valid_prefetch=32,
-                                                                 test_prefetch=32)
+                                                                 train_prefetch=4,
+                                                                 valid_prefetch=4,
+                                                                 test_prefetch=4)
 for inputs, outputs in test_dataset.take(2):
     print(type(inputs), type(outputs))
     print(inputs.shape, outputs.shape)
@@ -57,9 +57,7 @@ for inputs, outputs in test_dataset.take(2):
 # 输入是形状为6 × 15 × 15 的矩阵
 # model = models.stfm_model(time_slice=seq_length - 1, relevance_distance=d)
 # model = models.stfm(time_slice=seq_length - 1, relevance_distance=d)
-
-# logdir = os.path.join('Tcn_Model_Files')
-logdir = os.path.join('Tcn_Model_Files')
+logdir = os.path.join('tcn2d_model')
 if not os.path.exists(logdir):
     os.makedirs(logdir)
 output_model_file = os.path.join(logdir, 'tcn2d_model.h5')
@@ -67,14 +65,14 @@ if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
     model = models.tcn_model(time_slice=seq_length - 1, relevance_distance=d)
-
+model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
     keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1, write_images=True),
     # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1, mode='auto',
     #                                   min_delta=0.0001, cooldown=0, min_lr=0),
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
-    keras.callbacks.EarlyStopping(patience=5, min_delta=1e-3)
+    keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, min_delta=1e-3)
 ]
 # loss='mean_squared_error',
 
@@ -96,7 +94,7 @@ model.compile(loss=keras.losses.mean_squared_error,
               # metrics=['accuracy']
               )
 
-epochs = 20
+epochs = 100
 history = model.fit_generator(train_dataset,
                               steps_per_epoch=dataset.train_step_per_epoch,
                               validation_data=valid_dataset,
