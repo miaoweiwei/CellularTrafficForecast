@@ -127,6 +127,18 @@ def stfm(time_slice=16, relevance_distance=7):
     return model
 
 
+def tcn2d_conv_block(input_layers, activation, use_batch_norm, use_layer_norm):
+    added_output = keras.layers.add(input_layers)
+    if use_batch_norm:
+        added_output = keras.layers.BatchNormalization()(added_output)
+    elif use_layer_norm:
+        added_output = keras.layers.LayerNormalization()(added_output)
+
+    added_output = keras.layers.Activation(activation)(added_output)
+    # added_output = keras.layers.Dropout(dropout_rate)(added_output)
+    return added_output
+
+
 def tcn_model(time_slice=16,
               relevance_distance=7,
               filters=8,
@@ -152,17 +164,6 @@ def tcn_model(time_slice=16,
     """
     assert time_slice == pow(span, layers_count), '序列的长度必须等于 kernel_size^layers_count'
 
-    def conv_help(added_input):
-        added_output = keras.layers.add(added_input)
-        if use_batch_norm:
-            added_output = keras.layers.BatchNormalization()(added_output)
-        elif use_layer_norm:
-            added_output = keras.layers.LayerNormalization()(added_output)
-
-        added_output = keras.layers.Activation(activation)(added_output)
-        # added_output = keras.layers.Dropout(dropout_rate)(added_output)
-        return added_output
-
     inputs_ = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
     inputs = keras.layers.BatchNormalization()(inputs_)
     # inputs = inputs_
@@ -179,7 +180,7 @@ def tcn_model(time_slice=16,
                                        activation=activation,
                                        padding='same')(conv)
             addeds.append(conv)
-        added = conv_help(addeds)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
         convs.append(added)
 
     for i in range(1, layers_count):
@@ -196,7 +197,7 @@ def tcn_model(time_slice=16,
                                            activation=activation,
                                            padding='same')(conv)
                 addeds.append(conv)
-            added = conv_help(addeds)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
             convs_temp.append(added)
         convs = convs_temp
 
@@ -236,19 +237,7 @@ def tcn_3dconv_model(time_slice=16,
     :return:
     """
     assert time_slice == pow(span, layers_count), '序列的长度必须等于 kernel_size^layers_count'
-
     # 卷积中使用批归一化，全连接中使用dropout
-    def conv_help(added_input):
-        added_output = keras.layers.Add()(added_input)
-        if use_batch_norm:
-            added_output = keras.layers.BatchNormalization()(added_output)
-        elif use_layer_norm:
-            added_output = keras.layers.LayerNormalization()(added_output)
-
-        # added_output = keras.layers.Activation(activation)(added_output)
-        # added_output = keras.layers.Dropout(dropout_rate)(added_output)
-        return added_output
-
     inputs_ = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
     inputs = keras.layers.BatchNormalization()(inputs_)
     # inputs = inputs_
@@ -265,7 +254,7 @@ def tcn_3dconv_model(time_slice=16,
                                        activation=activation,
                                        padding='same')(conv)
             addeds.append(conv)
-        added = conv_help(addeds)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
         convs.append(added)
 
     for i in range(1, layers_count):
@@ -282,7 +271,7 @@ def tcn_3dconv_model(time_slice=16,
                                            activation=activation,
                                            padding='same')(conv)
                 addeds.append(conv)
-            added = conv_help(addeds)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
             convs_temp.append(added)
         convs = convs_temp
 
@@ -312,10 +301,99 @@ def tcn_3dconv_model(time_slice=16,
     return model
 
 
+def conv3d_tcn2d(time_slice=16,
+                 relevance_distance=7,
+                 filters=8,
+                 span=2,
+                 kernel_size=3,
+                 layers_count=4,
+                 activation='relu',
+                 dropout_rate=0.3,
+                 use_batch_norm=True,
+                 use_layer_norm=False):
+    assert time_slice == pow(span, layers_count), '序列的长度必须等于 kernel_size^layers_count'
+    # 卷积中使用批归一化，全连接中使用dropout
+    inputs_ = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
+    inputs = keras.layers.BatchNormalization()(inputs_)
+
+    # 3DConv module
+    conv3d = inputs
+    conv3d = keras.layers.Convolution3D(32,
+                                        # kernel_size=(3, 3, 3),
+                                        kernel_size=(3, 5, 5),
+                                        strides=(1, 2, 2),
+                                        activation=activation,
+                                        padding='same')(conv3d)
+    conv3d = keras.layers.MaxPool3D(pool_size=(1, 2, 2), strides=(1, 1, 1))(conv3d)
+    conv3d = keras.layers.BatchNormalization()(conv3d)
+
+    conv3d = keras.layers.Convolution3D(32,
+                                        # kernel_size=(3, 3, 3),
+                                        kernel_size=(3, 5, 5),
+                                        strides=(1, 2, 2),
+                                        activation=activation,
+                                        padding='same')(conv3d)
+    conv3d = keras.layers.MaxPool3D(pool_size=(1, 2, 2), strides=(1, 1, 1))(conv3d)
+    conv3d = keras.layers.BatchNormalization()(conv3d)
+
+    conv3d = keras.layers.Convolution3D(64,
+                                        # kernel_size=(3, 3, 3),
+                                        kernel_size=(3, 5, 5),
+                                        strides=(1, 2, 2),
+                                        activation=activation,
+                                        padding='same')(conv3d)
+    conv3d = keras.layers.MaxPool3D(pool_size=(1, 2, 2), strides=(1, 1, 1))(conv3d)
+    conv3d = keras.layers.BatchNormalization()(conv3d)
+
+    convs = []
+    for i in range(0, pow(span, layers_count), span):
+        addeds = []
+        for k in range(span):
+            conv = keras.layers.Conv2D(filters=filters,
+                                       kernel_size=kernel_size,
+                                       activation=activation,
+                                       padding='same')(conv3d[:, i + k])
+            conv = keras.layers.Conv2D(filters=filters,
+                                       kernel_size=kernel_size,
+                                       activation=activation,
+                                       padding='same')(conv)
+            addeds.append(conv)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+        convs.append(added)
+
+    for i in range(1, layers_count):
+        convs_temp = []
+        for j in range(0, len(convs), span):
+            addeds = []
+            for k in range(span):
+                conv = keras.layers.Conv2D(filters=(i + 1) * filters,
+                                           kernel_size=kernel_size,
+                                           activation=activation,
+                                           padding='same')(convs[j + k])
+                conv = keras.layers.Conv2D(filters=(i + 1) * filters,
+                                           kernel_size=kernel_size,
+                                           activation=activation,
+                                           padding='same')(conv)
+                addeds.append(conv)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+            convs_temp.append(added)
+        convs = convs_temp
+
+    x = convs[0]
+    x = keras.layers.Flatten()(x)
+    x = keras.layers.Dense(4096, activation=activation)(x)
+    x = keras.layers.Dropout(dropout_rate)(x)
+    x = keras.layers.Dense(2048, activation=activation)(x)
+    x = keras.layers.Dropout(dropout_rate)(x)
+    x = keras.layers.Dense(512, activation=activation)(x)
+    outputs = keras.layers.Dense(1)(x)
+    model = keras.models.Model(inputs=inputs_, outputs=outputs)
+    return model
+
+
 if __name__ == '__main__':
     seq_length = 16
     d = 7
-
     # stn = stn_model(time_slice=12, relevance_distance=5)
     # stn.summary()
     # keras.utils.plot_model(stn, "./model_png/stn.png", show_shapes=True)
@@ -330,16 +408,10 @@ if __name__ == '__main__':
     # tcn_temp = tcn_model()
     # tcn_temp.summary()
     # keras.utils.plot_model(tcn_temp, "./model_png/tcn2d.png", show_shapes=True)
-    tcn_3dconv = tcn_3dconv_model()
-    tcn_3dconv.summary()
-    keras.utils.plot_model(tcn_3dconv, "./model_png/tcn_3dconv_1.png", show_shapes=True)
+    # tcn_3dconv = tcn_3dconv_model()
+    # tcn_3dconv.summary()
+    # keras.utils.plot_model(tcn_3dconv, "./model_png/tcn_3dconv_1.png", show_shapes=True)
 
-"""
-Total params: 38,029,677
-Trainable params: 38,029,099
-Non-trainable params: 578
-
-Total params: 38,029,677
-Trainable params: 38,029,099
-Non-trainable params: 578
-"""
+    conv3d_tcn2d_model = conv3d_tcn2d()
+    conv3d_tcn2d_model.summary()
+    keras.utils.plot_model(conv3d_tcn2d_model, "./model_png/conv3d_tcn2d.png", show_shapes=True)

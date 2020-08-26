@@ -30,7 +30,7 @@ else:
     exit(0)
 model.summary()
 
-x_, y_ = provider.get_test_data(test_data, 550, 300, 350)
+x_, y_ = provider.get_test_data(test_data, 500, 400, 450)
 x = provider.data_normalized(x_, 'log1p')
 
 pre = model.predict(x)
@@ -39,5 +39,6 @@ pre_ = provider.data_anti_normalized(pre, 'expm1')
 mse = mean_squared_error(pre_, y_)
 
 plt.plot(y_, marker='.', mec='r', mfc='w')
-plt.plot(pre_, marker='o', ms=10)
+plt.plot(pre_, marker='*', ms=10)
 plt.show()
+print(mse)
