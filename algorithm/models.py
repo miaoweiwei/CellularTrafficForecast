@@ -9,10 +9,7 @@
 """
 
 from tensorflow import keras
-
-from tensorflow.keras import layers
-from tensorflow.keras.layers import Conv2D, Dropout, SeparableConv2D
-from algorithm.tcn import TCN, Tcn2D
+from algorithm.tcn import TCN
 
 
 def _get_inputs(time_slice=12, relevance_distance=5):
@@ -107,19 +104,6 @@ def stfm_model(time_slice=12, relevance_distance=5):
     spatial_feature = keras.layers.Reshape((-1, 1))(spatial_feature)
 
     time_feature = TCN(nb_filters=24, dilations=(1, 2, 4, 8), activation='relu')(spatial_feature)
-    fc = keras.layers.Flatten()(time_feature)
-
-    outputs = keras.layers.Dense(1, activation='relu', use_bias=True)(fc)
-    model = keras.models.Model(inputs=inputs, outputs=outputs)
-    return model
-
-
-def stfm(time_slice=16, relevance_distance=7):
-    inputs = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
-    spatial_feature = _spatial_feature_extraction(inputs, kernels=(32, 32, 64))
-    spatial_feature = keras.layers.Reshape((16, 16, 16))(spatial_feature)
-
-    time_feature = Tcn2D(nb_filters=24, dilations=(1, 2, 4, 8), activation='relu')(spatial_feature)
     fc = keras.layers.Flatten()(time_feature)
 
     outputs = keras.layers.Dense(1, activation='relu', use_bias=True)(fc)
@@ -311,6 +295,7 @@ def conv3d_tcn2d(time_slice=16,
                  dropout_rate=0.3,
                  use_batch_norm=True,
                  use_layer_norm=False):
+    """先经过3DConv在串联一个2DTCN"""
     assert time_slice == pow(span, layers_count), '序列的长度必须等于 kernel_size^layers_count'
     # 卷积中使用批归一化，全连接中使用dropout
     inputs_ = _get_inputs(time_slice=time_slice, relevance_distance=relevance_distance)
@@ -327,7 +312,7 @@ def conv3d_tcn2d(time_slice=16,
     conv3d = keras.layers.MaxPool3D(pool_size=(1, 2, 2), strides=(1, 1, 1))(conv3d)
     conv3d = keras.layers.BatchNormalization()(conv3d)
 
-    conv3d = keras.layers.Convolution3D(32,
+    conv3d = keras.layers.Convolution3D(64,
                                         # kernel_size=(3, 3, 3),
                                         kernel_size=(3, 5, 5),
                                         strides=(1, 2, 2),
@@ -336,7 +321,7 @@ def conv3d_tcn2d(time_slice=16,
     conv3d = keras.layers.MaxPool3D(pool_size=(1, 2, 2), strides=(1, 1, 1))(conv3d)
     conv3d = keras.layers.BatchNormalization()(conv3d)
 
-    conv3d = keras.layers.Convolution3D(64,
+    conv3d = keras.layers.Convolution3D(128,
                                         # kernel_size=(3, 3, 3),
                                         kernel_size=(3, 5, 5),
                                         strides=(1, 2, 2),

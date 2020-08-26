@@ -37,7 +37,7 @@ print("逻辑GPU的数量：", len(logical_gpus))
 """
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
-data_path = "E:/miao/dataset/milan_feature.txt"
+data_path = "D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\milan_feature.txt"
 batch_size = 4096
 
 # 构建数据集
@@ -46,9 +46,6 @@ dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
 dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
-                                                                 train_prefetch=4,
-                                                                 valid_prefetch=4,
-                                                                 test_prefetch=4)
                                                                  train_prefetch=4,
                                                                  valid_prefetch=4,
                                                                  test_prefetch=4)
@@ -67,7 +64,7 @@ output_model_file = os.path.join(logdir, 'conv3d_tcn2d.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
-    model = models.tcn_model(time_slice=seq_length - 1, relevance_distance=d)
+    model = models.conv3d_tcn2d(time_slice=seq_length - 1, relevance_distance=d)
 model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
@@ -75,7 +72,7 @@ callbacks = [
     # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1, mode='auto',
     #                                   min_delta=0.0001, cooldown=0, min_lr=0),
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
-    keras.callbacks.EarlyStopping(monitor="val_loss", patience=2, min_delta=1e-3)
+    keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-3)
 ]
 # loss='mean_squared_error',
 

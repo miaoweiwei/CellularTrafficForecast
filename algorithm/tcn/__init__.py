@@ -7,4 +7,4 @@
 @Software: PyCharm
 @Desc    : 
 """
-from algorithm.tcn.tcn import TCN, Tcn2D, compiled_tcn, tcn_full_summary
+from algorithm.tcn.tcn import TCN, compiled_tcn, tcn_full_summary
