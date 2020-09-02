@@ -15,14 +15,24 @@ from sklearn.metrics import mean_squared_error
 
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
-data_path = "E:/miao/dataset/milan_feature.txt"
+data_path = "D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\milan_feature.txt"
 batch_size = 1600 * 2
 
+# 构建数据集
 provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
-train_data, valid_data, test_data = provider.provider(valid_size=0.1, test_size=0.1, israndom=False, isnorm=False)
+dataset = data_provider.Dateset(provider)
+# 在模型里使用了批归一化，数据就不需要在做归一化了
+dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=False)
+train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
+                                                                 train_prefetch=4,
+                                                                 valid_prefetch=4,
+                                                                 test_prefetch=4)
+for inputs, outputs in test_dataset.take(2):
+    print(type(inputs), type(outputs))
+    print(inputs.shape, outputs.shape)
 
-logdir = os.path.join('tcn2d_model')
-output_model_file = os.path.join(logdir, 'tcn2d_model.h5')
+logdir = os.path.join('conv3d_tcn2d')
+output_model_file = os.path.join(logdir, 'conv3d_tcn2d.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
@@ -30,7 +40,7 @@ else:
     exit(0)
 model.summary()
 
-x_, y_ = provider.get_test_data(test_data, 500, 400, 450)
+x_, y_ = provider.get_test_data(provider.test_data, 500, 300, 400)
 x = provider.data_normalized(x_, 'log1p')
 
 pre = model.predict(x)
