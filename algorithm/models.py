@@ -111,7 +111,7 @@ def stfm_model(time_slice=12, relevance_distance=5):
     return model
 
 
-def tcn2d_conv_block(input_layers, activation, use_batch_norm, use_layer_norm):
+def tcn2d_conv_block(input_layers, activation, use_batch_norm, use_layer_norm, dropout_rate):
     added_output = keras.layers.add(input_layers)
     if use_batch_norm:
         added_output = keras.layers.BatchNormalization()(added_output)
@@ -119,7 +119,7 @@ def tcn2d_conv_block(input_layers, activation, use_batch_norm, use_layer_norm):
         added_output = keras.layers.LayerNormalization()(added_output)
 
     added_output = keras.layers.Activation(activation)(added_output)
-    # added_output = keras.layers.Dropout(dropout_rate)(added_output)
+    added_output = keras.layers.Dropout(dropout_rate)(added_output)
     return added_output
 
 
@@ -164,7 +164,7 @@ def tcn_model(time_slice=16,
                                        activation=activation,
                                        padding='same')(conv)
             addeds.append(conv)
-        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
         convs.append(added)
 
     for i in range(1, layers_count):
@@ -181,7 +181,7 @@ def tcn_model(time_slice=16,
                                            activation=activation,
                                            padding='same')(conv)
                 addeds.append(conv)
-            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
             convs_temp.append(added)
         convs = convs_temp
 
@@ -238,7 +238,7 @@ def tcn_3dconv_model(time_slice=16,
                                        activation=activation,
                                        padding='same')(conv)
             addeds.append(conv)
-        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
         convs.append(added)
 
     for i in range(1, layers_count):
@@ -255,7 +255,7 @@ def tcn_3dconv_model(time_slice=16,
                                            activation=activation,
                                            padding='same')(conv)
                 addeds.append(conv)
-            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
             convs_temp.append(added)
         convs = convs_temp
 
@@ -343,7 +343,7 @@ def conv3d_tcn2d(time_slice=16,
                                        activation=activation,
                                        padding='same')(conv)
             addeds.append(conv)
-        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+        added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
         convs.append(added)
 
     for i in range(1, layers_count):
@@ -360,7 +360,7 @@ def conv3d_tcn2d(time_slice=16,
                                            activation=activation,
                                            padding='same')(conv)
                 addeds.append(conv)
-            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm)
+            added = tcn2d_conv_block(addeds, activation, use_batch_norm, use_layer_norm, dropout_rate)
             convs_temp.append(added)
         convs = convs_temp
 

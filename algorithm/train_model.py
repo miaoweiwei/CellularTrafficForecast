@@ -57,14 +57,14 @@ for inputs, outputs in test_dataset.take(2):
 # 输入是形状为6 × 15 × 15 的矩阵
 # model = models.stfm_model(time_slice=seq_length - 1, relevance_distance=d)
 # model = models.stfm(time_slice=seq_length - 1, relevance_distance=d)
-logdir = os.path.join('conv3d_tcn2d')
+logdir = os.path.join('tcn_3dconv_model')
 if not os.path.exists(logdir):
     os.makedirs(logdir)
-output_model_file = os.path.join(logdir, 'conv3d_tcn2d.h5')
+output_model_file = os.path.join(logdir, 'tcn_3dconv_model.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
-    model = models.conv3d_tcn2d(time_slice=seq_length - 1, relevance_distance=d)
+    model = models.tcn_3dconv_model(time_slice=seq_length - 1, relevance_distance=d)
 model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
@@ -72,7 +72,7 @@ callbacks = [
     # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1, mode='auto',
     #                                   min_delta=0.0001, cooldown=0, min_lr=0),
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
-    keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-3)
+    keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-8)
 ]
 # loss='mean_squared_error',
 
