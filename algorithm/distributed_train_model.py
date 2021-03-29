@@ -108,7 +108,7 @@ with tf.device("/cpu:0"):  # 定义分布式的模型
     if os.path.isfile(output_model_file):
         model = keras.models.load_model(output_model_file)
     else:
-        model = models.tcn_3dconv_model(time_slice=seq_length - 1, relevance_distance=d)
+        model = models.tcn2d_conv3d_model(time_slice=seq_length - 1, relevance_distance=d)
 
 model = keras.utils.multi_gpu_model(model, 2)
 

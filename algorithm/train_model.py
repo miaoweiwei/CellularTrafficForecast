@@ -38,15 +38,19 @@ print("逻辑GPU的数量：", len(logical_gpus))
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
 data_path = "D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\milan_feature.txt"
-batch_size = 4096
+batch_size = 2048
+random_seed = 666
 
+# 固定随机数种子
+np.random.seed(random_seed)
+tf.random.set_seed(random_seed)
 # 构建数据集
 provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
 dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
 dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
-                                                                 train_prefetch=4,
+                                                                 train_prefetch=8,
                                                                  valid_prefetch=4,
                                                                  test_prefetch=4)
 for inputs, outputs in test_dataset.take(2):
@@ -64,15 +68,15 @@ output_model_file = os.path.join(logdir, 'tcn_3dconv_model.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
-    model = models.tcn_3dconv_model(time_slice=seq_length - 1, relevance_distance=d)
+    model = models.tcn2d_conv3d_model(time_slice=seq_length - 1, relevance_distance=d)
 model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
-    keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1, write_images=True),
+    keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1, write_images=True, update_freq=1000),
     # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1, mode='auto',
     #                                   min_delta=0.0001, cooldown=0, min_lr=0),
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
-    keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-8)
+    keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-8, mode='min')
 ]
 # loss='mean_squared_error',
 
@@ -89,9 +93,12 @@ callbacks = [
 # 使用这个函数能够减少这些值对整体误差的影响
 
 model.compile(loss=keras.losses.mean_squared_error,
-              optimizer=keras.optimizers.Adam(lr=0.001, decay=0.1, epsilon=1e-8),
+              # optimizer=keras.optimizers.Adam(lr=0.001, decay=0.1, epsilon=1e-8),
+              optimizer=keras.optimizers.Adadelta(learning_rate=0.1),
               # optimizer='SGD',
               # metrics=['accuracy']
+              # 记录均方误差、平均绝对百分比误差,平均绝对误差
+              # metrics=[keras.metrics.mse, keras.metrics.mape, keras.metrics.mae]
               )
 
 epochs = 100

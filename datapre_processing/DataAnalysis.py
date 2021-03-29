@@ -18,16 +18,28 @@ import matplotlib.pyplot as plt
 
 sns.set_style("ticks")
 sns.set_context("paper")
+# 日期解析
 DatetimeParse = lambda x: datetime.datetime.fromtimestamp(float(x) / 1000)
+
+
+def date_parser(x):
+    return datetime.datetime.fromtimestamp(float(x) / 1000)
 
 
 def day_folw_trend(files=[]):
     file_sum = pd.DataFrame({})
     for filepath in files:
-        file_temp = pd.read_csv(filepath, sep=',',
-                                encoding="utf-8-sig",
-                                parse_dates=['datetime'],
-                                date_parser=DatetimeParse)
+        file_temp = pd.read_csv(
+            filepath,
+            sep='\t',  # 按tab分割
+            encoding="utf-8-sig",
+            names=[
+                'cellid', 'datetime', 'countrycode', 'smsin', 'smsout', 'callin',
+                'callout', 'internet'
+            ],
+            parse_dates=['datetime'],  # 要解析的数据
+            date_parser=DatetimeParse  # 使用的解析方法
+        )
         file_temp = file_temp.set_index('datetime')
         file_temp['hour'] = file_temp.index.hour
         file_temp['weekday'] = file_temp.index.weekday
@@ -48,17 +60,21 @@ def day_folw_trend(files=[]):
     fig_height = fig_width * golden_mean * 2  # height in inches 高度（英寸）
     fig_size = [fig_width, fig_height]
     # Behaviour plot
-    types = ['sms', 'calls', 'internet']
+    types = ['smsin', 'callin', 'internet']
     f, axs = plt.subplots(len(types), sharex=True, sharey=True, figsize=fig_size)
+
+    timeSlice = [i for i in range(7, 25)]
+    timeSlice = timeSlice + [i for i in range(1, 7)]
     for i, p in enumerate(types):
-        plt.xticks(np.arange(24, step=1))  # 第一天的7点到第二天的6点
+        # plt.xticks(np.arange(24, step=1))  # 第一天的7点到第二天的6点
+        plt.xticks(timeSlice)  # 第一天的7点到第二天的6点
         axs[i].plot(sliceSum_z[p].values, label=p)
         axs[i].legend(loc='upper center')  # 每一个图的图例显示在图的上方中心的位置
         sns.despine()
-    f.text(0, 0.5, "Number of events", rotation="vertical", va="center")
-    plt.xlabel("Hour (in a day,2013-11-05)")
-    plt.savefig('day_folw_trend.pdf', format='pdf', dpi=330, bbox_inches='tight')
-    plt.show()
+        f.text(0, 0.5, "Number of events", rotation="vertical", va="center")
+        plt.xlabel("Hour (in a day,2013-11-05)")
+        plt.savefig('day_folw_trend.pdf', format='pdf', dpi=330, bbox_inches='tight')
+        plt.show()
 
 
 def week_folw_trend(files=[]):
@@ -92,7 +108,7 @@ def week_folw_trend(files=[]):
     fig_height = fig_width * golden_mean * 2  # height in inches 高度（英寸）
     fig_size = [fig_width, fig_height]
     # Behaviour plot
-    types = ['sms', 'calls', 'internet']
+    types = ['smsin', 'callin', 'internet']
     f, axs = plt.subplots(len(types), sharex=True, sharey=True, figsize=fig_size)
     for i, p in enumerate(types):
         plt.xticks(np.arange(168, step=10))  # 一周 168小时
@@ -106,11 +122,12 @@ def week_folw_trend(files=[]):
 
 
 if __name__ == '__main__':
-    milanpredatadir = r"D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\Milan"
+    # milanpredatadir = r"D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\Milan"
+    data_path = r"D:\Myproject\Python\Datasets\MobileFlowData\SourceData\Milan"
     # 2013-11-04  2013-11-10 总共一周 ，从周一到周日
-    file_name = 'preprocess_sms-call-internet-mi-2013-11-{0}.txt'
+    file_name = 'sms-call-internet-mi-2013-11-{0}.txt'
     files = []
     for i in range(4, 11):
-        files.append(os.path.join(milanpredatadir, file_name.format(str(i).zfill(2))))
+        files.append(os.path.join(data_path, file_name.format(str(i).zfill(2))))
     # week_folw_trend(files)
     day_folw_trend(files[:2])

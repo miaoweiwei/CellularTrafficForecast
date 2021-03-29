@@ -17,6 +17,9 @@ import pandas as pd
 import multiprocessing
 from multiprocessing import Pool
 
+# 日期解析
+datetime_parse = lambda x: datetime.datetime.fromtimestamp(float(x) / 1000)
+
 
 def data_extraction(source_path, new_path, *args):
     """ 对原始数据进行数据提取
@@ -88,25 +91,24 @@ def internet_data_population(df, date_time, d=5):
     :param d: 填充数据时要以周围多远的数据做平均填充
     :return: 返回填充好的数据，类型为 {datetime:narray}
     """
+    # 首先判断数据够不够 10000 个如果不够说明存在某个位置缺少值
     if len(df) != 10000:
         # 找到缺少数据的那个cellid然后补上数据
         conut, i, cellid = 10000, 0, 1
         while i < conut:
-            if df.iloc[i].cellid != cellid:
-                # print("\r时刻：{0} cellid为：{1} 的数据缺失".format(datetime.datetime.fromtimestamp(float(date_time) / 1000),
-                #                                           cellid), end=' ')
+            if df.iloc[i].cellid != cellid:  # 数据是排好顺序的
+                # print("\r时刻：{0} cellid为：{1} 的数据缺失".format(datetime_parse(float(date_time)), cellid), end=' ')
                 # 先用 null 标记缺少数据的位置 转成数值矩阵之后在补充
-                temp_df = pd.DataFrame(  # df.loc[0].datetime 时刻
-                    [[date_time, cellid, 'null']],
-                    columns=['datetime', 'cellid', 'internet'])
+                temp_df = pd.DataFrame([[date_time, cellid, 'null']], columns=['datetime', 'cellid', 'internet'])
                 df = df.append(temp_df)
                 cellid += 1
                 conut -= 1
+                continue
             cellid += 1
             i += 1
         # 填充完毕之后记得重新排序，因为新加的都在最后面，先按照时间排序在按照cellid排序
-        df = df.sort_values(by=['cellid'])
-        # 取出Internet数据
+        df = df.sort_values(by=['datetime', 'cellid'])
+        # 取出Internet数据 把数据转成和网格图一样的序列
         feature = df.values[:, 2].reshape(100, 100)[::-1, :]
         # 补充缺少数据的位置
         # 把网络数据补充为缺失值周围 (d*2+1)X(d*2+1) 范围内的平均值
@@ -114,17 +116,17 @@ def internet_data_population(df, date_time, d=5):
         index_arr = list(zip(*indexs))
         for row, col in index_arr:
             up = max(row - d, 0)
-            down = min(row + d + 1, 5)
+            down = min(row + d + 1, 100)
             left = max(col - d, 0)
-            right = min(col + d + 1, 5)
+            right = min(col + d + 1, 100)
 
             temp = feature[up:down, left:right]
             temp[temp == 'null'] = 0
             temp = temp.astype(np.float32)
-            if np.count_nonzero(temp) == 0:
+            if np.count_nonzero(temp) == 0:  # count_nonzero 计算非0的个数
                 feature[row, col] = 0
             else:
-                feature[row, col] = np.divide(temp.sum(), np.count_nonzero(temp))  # 取周围非0值的平均值
+                feature[row, col] = np.divide(temp.sum(), np.count_nonzero(temp))  # 取周围(d*2+1)X(d*2+1) 范围内的平均值
         return date_time, feature.astype(np.float32)
     else:
         # 数据集中说明了 100X100 的编号是从下面开始的,所以在第一个维度(行)逆置
@@ -134,8 +136,8 @@ def internet_data_population(df, date_time, d=5):
         return date_time, feature.astype(np.float32)
 
 
-def internet_data_parse(file_path):
-    # 日期解析
+def internet_check_fill_to_matrix(file_path):
+    # Check and fill and transfer matrix
     # datetime_parse = lambda x: datetime.datetime.fromtimestamp(float(x) / 1000)
     df = pd.read_csv(file_path, sep=',',
                      # encoding="utf-8-sig",
@@ -155,6 +157,8 @@ def internet_data_parse(file_path):
 
 
 class DataProcess(object):
+    """检查数据的缺失并填充，然后把数据转成一张张图片的形式"""
+
     def __init__(self, datadir):
         self.data_dir = datadir
         self.file_paths = []
@@ -175,11 +179,13 @@ class DataProcess(object):
     # __xx 双下划线的表示的是私有类型的变量。只能允许这个类本身进行访问了，连子类也不可以访问
     # __xx__定义的是特列方法，不要自己定义这类方法
     def _data_population_callback(self, data):
+        """收集处理后的数据，并计算耗时"""
         if isinstance(data, tuple):
             date_time, feature = data
             if date_time not in self.feature_data_dic:
                 self.feature_data_dic[date_time] = feature
         elif isinstance(data, dict):
+            # 字典合并
             self.feature_data_dic.update(data)
 
         self._processed_count += 1
@@ -188,6 +194,7 @@ class DataProcess(object):
                                                         time.time() - self._start_time), end=' ')
 
     def load_parse_async(self, processes=-1):
+        """开始处理数据"""
         self._start_time = time.time()
         self._processed_count = 0
         if len(self.file_paths) <= 0:
@@ -198,7 +205,8 @@ class DataProcess(object):
             processes = os.cpu_count() * 2
         pool = Pool(processes=processes)
         for file_path in self.file_paths:
-            pool.apply_async(internet_data_parse, args=(file_path,), callback=self._data_population_callback)
+            # internet_check_fill_to_matrix执行结束后就会执行 callback。callback的参数就是internet_check_fill_to_matrix的返回值
+            pool.apply_async(internet_check_fill_to_matrix, args=(file_path,), callback=self._data_population_callback)
         pool.close()
         pool.join()
         print("")
@@ -209,7 +217,7 @@ class DataProcess(object):
         # 把numpy数组序列化list，因为numpy类型不能被json处理
 
         # 要先排好序在进行转换
-        self.feature_data_dic = dict(sorted(self.feature_data_dic.items(), key=lambda item: item[0]))
+        self.feature_data_dic = dict(sorted(self.feature_data_dic.items(), key=lambda item: item[0]))  # 按时间进行排序
         self.feature_data_dic = {str(key): value.tolist() for key, value in self.feature_data_dic.items()}
         with open(file_path, 'w') as f:
             json.dump(self.feature_data_dic, f)  # 把python对象保存成文件
@@ -236,6 +244,6 @@ if __name__ == '__main__':
     # 共62天 每天144个数据
     print("数据的总数：%d" % len(process.feature_data_dic))
 
-    feature_dir = "D:/Myproject/Python/Datasets/MobileFlowData/PreprocessingData/Milan_Feature/"
+    feature_dir = r"D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData"
     milan_internet_data_path = os.path.join(feature_dir, "traffic_data.txt")
     process.save(milan_internet_data_path)
