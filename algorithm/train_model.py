@@ -37,7 +37,7 @@ print("逻辑GPU的数量：", len(logical_gpus))
 """
 seq_length = 17  # 序列的长度 输入的长度+输出的长度
 d = 7
-data_path = "D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\milan_feature.txt"
+data_path = r"D:\Myproject\Python\Datasets\MobileFlowData\PreprocessingData\traffic_data.txt"
 batch_size = 2048
 random_seed = 666
 
@@ -48,6 +48,8 @@ tf.random.set_seed(random_seed)
 provider = data_provider.DataProvider(data_path, time_slice=seq_length, relevance_distance=d)
 dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
+
+# israndom = True
 dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
                                                                  train_prefetch=8,
@@ -61,18 +63,23 @@ for inputs, outputs in test_dataset.take(2):
 # 输入是形状为6 × 15 × 15 的矩阵
 # model = models.stfm_model(time_slice=seq_length - 1, relevance_distance=d)
 # model = models.stfm(time_slice=seq_length - 1, relevance_distance=d)
-logdir = os.path.join('tcn_3dconv_model')
+model_name = "tcn2d_model"
+logdir = os.path.join(model_name)
 if not os.path.exists(logdir):
     os.makedirs(logdir)
-output_model_file = os.path.join(logdir, 'tcn_3dconv_model.h5')
+output_model_file = os.path.join(logdir, model_name + '.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
-    model = models.tcn2d_conv3d_model(time_slice=seq_length - 1, relevance_distance=d)
+    model = models.tcn2d_model(time_slice=seq_length - 1,
+                               relevance_distance=d,
+                               dropout_rate=0.5,
+                               use_batch_norm=False,
+                               use_layer_norm=True)
 model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
-    keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1, write_images=True, update_freq=1000),
+    keras.callbacks.TensorBoard(log_dir=logdir, histogram_freq=1, write_images=True, update_freq=10000),
     # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3, verbose=1, mode='auto',
     #                                   min_delta=0.0001, cooldown=0, min_lr=0),
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
@@ -92,9 +99,11 @@ callbacks = [
 # 当数据中存在少量的值和真实值差值较大的时候，
 # 使用这个函数能够减少这些值对整体误差的影响
 
+# loss=keras.losses.mean_squared_error
+
 model.compile(loss=keras.losses.mean_squared_error,
-              # optimizer=keras.optimizers.Adam(lr=0.001, decay=0.1, epsilon=1e-8),
-              optimizer=keras.optimizers.Adadelta(learning_rate=0.1),
+              optimizer=keras.optimizers.Adam(lr=0.001, decay=0.1, epsilon=1e-8),
+              # optimizer=keras.optimizers.Adadelta(learning_rate=0.1),
               # optimizer='SGD',
               # metrics=['accuracy']
               # 记录均方误差、平均绝对百分比误差,平均绝对误差

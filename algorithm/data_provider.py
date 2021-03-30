@@ -31,7 +31,7 @@ class DataProvider(object):
         self.valid_data = None
         self.test_data = None
 
-    def provider(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='log1p', isnorm=True):
+    def provider(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='z_scores', isnorm=True):
         """ 数据的获取
         :param valid_size: 验证集的比例
         :param test_size: 测试集的比例
@@ -51,22 +51,34 @@ class DataProvider(object):
         return self.train_data, self.valid_data, self.test_data
 
     @staticmethod
-    def data_normalized(data, norm_func='log1p'):
+    def data_normalized(data, norm_func='z_scores', is_prediction=False, mean=0, std=1):
         if norm_func == 'log1p':
             return np.log1p(data)
         if norm_func == 'log10p':
             return np.log10(data + 1)
         if norm_func == 'arctan':
             return np.atan(data)
+        if norm_func == 'z_scores':
+            if not is_prediction:
+                mean = np.mean(data)
+                std = np.std(data)
+                with open("mean_std.txt", "w") as f:
+                    f.write("mean:{0}\n".format(mean))
+                    f.write("std:{0}\n".format(std))
+                return (data - mean) / std
+            else:  # 当前是预测
+                return (data - mean) / std
 
     @staticmethod
-    def data_anti_normalized(data, norm_func='expm1'):
-        if norm_func == 'expm1':
+    def data_anti_normalized(data, norm_func='z_scores', mean=0, std=1):
+        if norm_func == 'log1p':
             return np.expm1(data)  # 为np.log1p(data)的反向操作
         if norm_func == 'log10p':
             return np.power(10, data) - 1
         if norm_func == 'tan':
             return np.tan(data)
+        if norm_func == 'z_scores':
+            return data * std + mean
 
     def _load_data(self):
         start_time = time.time()
@@ -223,6 +235,8 @@ class DataProvider(object):
         """ 获取测试的数据，用于数据的预测
         :param data: 序列的数据
         :param cell_id: 要预测的方格的id
+        :param start: 开始的序列额编号
+        :param end: 结束的序列额编号
         """
         start_time = time.time()
         x = []
@@ -245,7 +259,7 @@ class Dateset(object):
     def __init__(self, provider):
         self.provider = provider
 
-    def ceate_data(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='log1p', isnorm=True):
+    def ceate_data(self, valid_size=0.2, test_size=0.2, israndom=True, norm_func='z_scores', isnorm=True):
         train_data, valid_data, test_data = self.provider.provider(valid_size=valid_size,
                                                                    test_size=test_size,
                                                                    israndom=israndom,
