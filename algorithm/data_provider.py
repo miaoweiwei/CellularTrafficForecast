@@ -41,11 +41,14 @@ class DataProvider(object):
         :return:
         """
         features = self._load_data()
-        if isnorm:
-            features = DataProvider.data_normalized(features, norm_func=norm_func)
-        features = self._create_seq(features)
-        self.train_data, self.valid_data, self.test_data = DataProvider.data_split(features, valid_size, test_size,
-                                                                                   israndom=israndom)
+        try:
+            if isnorm:
+                features = DataProvider.data_normalized(features, norm_func=norm_func)
+            features = self._create_seq(features)
+            self.train_data, self.valid_data, self.test_data = DataProvider.data_split(features, valid_size, test_size,
+                                                                                       israndom=israndom)
+        except Exception as ex:
+            print(ex)
         # 删除不用的变量一遍节省内存
         del features
         return self.train_data, self.valid_data, self.test_data

@@ -50,7 +50,7 @@ dataset = data_provider.Dateset(provider)
 # 在模型里使用了批归一化，数据就不需要在做归一化了
 
 # israndom = True
-dataset.ceate_data(valid_size=0.1, test_size=0.1, israndom=True, isnorm=True)
+dataset.ceate_data(valid_size=0.1, test_size=0.5, israndom=True, isnorm=True)
 train_dataset, valid_dataset, test_dataset = dataset.get_dataset(batch_size,
                                                                  train_prefetch=8,
                                                                  valid_prefetch=4,
@@ -59,11 +59,13 @@ for inputs, outputs in test_dataset.take(2):
     print(type(inputs), type(outputs))
     print(inputs.shape, outputs.shape)
 
+exit()
+
 # model = models.stn_model(time_slice=seq_length - 1, relevance_distance=d)
 # 输入是形状为6 × 15 × 15 的矩阵
 # model = models.stfm_model(time_slice=seq_length - 1, relevance_distance=d)
 # model = models.stfm(time_slice=seq_length - 1, relevance_distance=d)
-model_name = "tcn2d_model"
+model_name = "tcn2d_and_conv3d_model"
 logdir = os.path.join(model_name)
 if not os.path.exists(logdir):
     os.makedirs(logdir)
@@ -71,11 +73,11 @@ output_model_file = os.path.join(logdir, model_name + '.h5')
 if os.path.isfile(output_model_file):
     model = keras.models.load_model(output_model_file)
 else:
-    model = models.tcn2d_model(time_slice=seq_length - 1,
-                               relevance_distance=d,
-                               dropout_rate=0.5,
-                               use_batch_norm=False,
-                               use_layer_norm=True)
+    model = models.tcn2d_and_conv3d_model(time_slice=seq_length - 1,
+                                          relevance_distance=d,
+                                          dropout_rate=0.5,
+                                          use_batch_norm=False,
+                                          use_layer_norm=True)
 model.summary()
 # 这里的路径要使用 os.path.join 包装一下，不然会报错
 callbacks = [
@@ -85,7 +87,25 @@ callbacks = [
     keras.callbacks.ModelCheckpoint(output_model_file, save_best_only=True, save_weights_only=False),  # 保存模型和权重
     keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, min_delta=1e-8, mode='min')
 ]
-# loss='mean_squared_error',
+
+# 均方对数误差 keras.losses.mean_squared_logarithmic_error
+# 优点惩罚预测大于过预测，就是当预测值小于真实值
+# 当数据中存在少量的值和真实值差值较大的时候，
+# 使用这个函数能够减少这些值对整体误差的影响
+
+# loss=keras.losses.mean_squared_error
+#  MSE 会对误差较大（>1）的情况给予更大的惩罚，对误差较小（<1）的情况给予更小的惩罚。
+#  从训练的角度来看，模型会更加偏向于惩罚较大的点，赋予其更大的权重。
+
+# keras.losses.mae
+# 在预测值和真实值相同时，集误差为0处会出现不可导的情况
+# 计算机求解导数比较困难。而且 MAE 大部分情况下梯度都是相等的，这意味着即使对于小的损失值，其梯度也是大的。
+# 这不利于函数的收敛和模型的学习。
+# MAE 相比 MSE 有个优点就是 MAE 对离群点不那么敏感，更有包容性。
+# 因为 MAE 计算的是误差 y-f(x) 的绝对值，无论是 y-f(x)>1 还是 y-f(x)<1，没有平方项的作用，惩罚力度都是一样的
+
+# keras.losses.Huber
+# 整合了 mean_squared_error 和 mae 但是需要不断的跳转超参数
 
 # keras.losses.logcosh
 # Log-cosh Loss
@@ -94,14 +114,7 @@ callbacks = [
 # 但不会受到偶然误差预测的强烈影响。它具有Huber损失的所有优点，并且它在各处都是可区分的，
 # 与Huber损失不同。
 
-# 均方对数误差 keras.losses.mean_squared_logarithmic_error
-# 优点惩罚预测大于过预测，就是当预测值小于真实值
-# 当数据中存在少量的值和真实值差值较大的时候，
-# 使用这个函数能够减少这些值对整体误差的影响
-
-# loss=keras.losses.mean_squared_error
-
-model.compile(loss=keras.losses.mean_squared_error,
+model.compile(loss=keras.losses.logcosh,
               optimizer=keras.optimizers.Adam(lr=0.001, decay=0.1, epsilon=1e-8),
               # optimizer=keras.optimizers.Adadelta(learning_rate=0.1),
               # optimizer='SGD',
